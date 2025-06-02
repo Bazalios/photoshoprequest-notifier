@@ -2,131 +2,102 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <title>Novos posts do r/PhotoshopRequest</title>
+  <title>Notificador Reddit - r/PhotoshopRequest</title>
   <style>
     body {
       font-family: Arial, sans-serif;
-      max-width: 600px;
-      margin: 40px auto;
-      padding: 20px;
-      background-color: #f0f0f0;
-      border-radius: 8px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      text-align: center;
+      padding: 30px;
+      background-color: #f9f9f9;
     }
     h1 {
-      text-align: center;
       color: #ff4500;
     }
-    ul {
-      list-style: none;
-      padding: 0;
+    #posts {
+      margin-top: 20px;
     }
-    li {
-      margin-bottom: 15px;
-      background: #fff;
+    .post {
+      margin: 10px auto;
       padding: 10px;
-      border-left: 4px solid #ff4500;
-      border-radius: 4px;
+      max-width: 600px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      background: #fff;
+      text-align: left;
     }
-    a {
+    .post a {
       text-decoration: none;
-      color: #333;
-    }
-    a:hover {
-      text-decoration: underline;
-    }
-    button {
-      display: block;
-      margin: 20px auto;
-      padding: 10px 20px;
-      font-size: 16px;
-      background-color: #ff4500;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-    }
-    button:hover {
-      background-color: #e03d00;
+      color: #0079d3;
     }
   </style>
 </head>
 <body>
-  <h1>Últimos posts - r/PhotoshopRequest</h1>
-  <button onclick="iniciar()">🔄 Atualizar agora</button>
-  <ul id="lista-posts">
-    <li>Carregando posts...</li>
-  </ul>
-
-  <audio id="somAlerta" src="https://github.com/notificationsounds/soundpack/raw/master/tones/piece-of-cake.mp3" preload="auto"></audio>
+  <h1>📢 Notificador de Novos Posts - r/PhotoshopRequest</h1>
+  <div id="status">Carregando...</div>
+  <div id="posts"></div>
 
   <script>
-    let ultimoPostId = null;
-    let som;
-    let intervalo = null;
+    const proxyUrl = "https://reddit-cors-proxy.onrender.com/?url=";
+    const redditUrl = "https://www.reddit.com/r/PhotoshopRequest/new.json?limit=5";
 
-    async function buscarPosts(exibirNotificacao = true) {
-      const lista = document.getElementById('lista-posts');
-      const urlReddit = 'https://www.reddit.com/r/PhotoshopRequest/new.json?limit=10';
-      const urlProxy = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(urlReddit)}`;
+    let lastPostId = null;
 
+    async function verificarNovosPosts() {
       try {
-        const resposta = await fetch(urlProxy);
+        const resposta = await fetch(proxyUrl + encodeURIComponent(redditUrl));
         const dados = await resposta.json();
-
         const posts = dados.data.children;
-        lista.innerHTML = '';
 
-        posts.forEach((item, index) => {
-          const post = item.data;
-          const li = document.createElement('li');
-          li.innerHTML = `<a href="https://www.reddit.com${post.permalink}" target="_blank">${post.title}</a>`;
-          lista.appendChild(li);
+        if (!posts || posts.length === 0) {
+          document.getElementById("status").innerText = "Nenhum post encontrado.";
+          return;
+        }
 
-          if (index === 0 && post.id !== ultimoPostId) {
-            if (ultimoPostId && exibirNotificacao) {
-              mostrarNotificacao(post.title, `https://www.reddit.com${post.permalink}`);
-              if (som) {
-                som.currentTime = 0;
-                som.play().catch(e => console.warn("Erro ao tocar som:", e));
-              }
-            }
-            ultimoPostId = post.id;
-          }
-        });
+        const novoPostId = posts[0].data.id;
+
+        if (lastPostId && novoPostId !== lastPostId) {
+          mostrarNotificacao(posts[0].data);
+        }
+
+        lastPostId = novoPostId;
+        atualizarPosts(posts);
+        document.getElementById("status").innerText = "Última verificação: " + new Date().toLocaleTimeString();
+
       } catch (erro) {
-        lista.innerHTML = '<li>Erro ao carregar os posts 😞</li>';
-        console.error('Erro ao buscar posts:', erro);
+        console.error("Erro ao carregar posts:", erro);
+        document.getElementById("status").innerText = "Erro ao carregar os posts 😞";
       }
     }
 
-    function mostrarNotificacao(titulo, link) {
-      if (Notification.permission === 'granted') {
-        const notificacao = new Notification('🆕 Novo post no r/PhotoshopRequest!', {
-          body: titulo,
-          icon: 'https://www.redditstatic.com/desktop2x/img/favicon/apple-icon-120x120.png'
+    function atualizarPosts(posts) {
+      const container = document.getElementById("posts");
+      container.innerHTML = "";
+      posts.forEach(post => {
+        const div = document.createElement("div");
+        div.className = "post";
+        div.innerHTML = `<a href="https://reddit.com${post.data.permalink}" target="_blank">${post.data.title}</a>`;
+        container.appendChild(div);
+      });
+    }
+
+    function mostrarNotificacao(post) {
+      if (Notification.permission === "granted") {
+        new Notification("Novo post em r/PhotoshopRequest", {
+          body: post.title,
+          icon: "https://www.redditstatic.com/desktop2x/img/favicon/android-icon-192x192.png"
         });
-
-        notificacao.onclick = () => {
-          window.open(link, '_blank');
-        };
       }
     }
 
-    function iniciar() {
-      if ('Notification' in window && Notification.permission !== 'granted') {
-        Notification.requestPermission();
-      }
-
-      som = document.getElementById('somAlerta');
-      som.play().then(() => som.pause()).catch(() => {});
-
-      buscarPosts(false); // Primeira verificação
-
-      if (!intervalo) {
-        intervalo = setInterval(() => buscarPosts(true), 30000); // Verifica a cada 30s
+    async function solicitarPermissaoNotificacao() {
+      if (Notification.permission !== "granted") {
+        await Notification.requestPermission();
       }
     }
+
+    solicitarPermissaoNotificacao();
+    verificarNovosPosts();
+    setInterval(verificarNovosPosts, 30000); // 30 segundos
   </script>
 </body>
 </html>
