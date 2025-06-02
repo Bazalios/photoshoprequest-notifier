@@ -37,14 +37,12 @@
   <div id="posts"></div>
 
   <script>
-    const proxyUrl = "https://reddit-cors-proxy.onrender.com/?url=";
-    const redditUrl = "https://www.reddit.com/r/PhotoshopRequest/new.json?limit=5";
-
+    const redditUrl = "https://api.reddit.com/r/PhotoshopRequest/new?limit=5";
     let lastPostId = null;
 
     async function verificarNovosPosts() {
       try {
-        const resposta = await fetch(proxyUrl + encodeURIComponent(redditUrl));
+        const resposta = await fetch(redditUrl);
         const dados = await resposta.json();
         const posts = dados.data.children;
 
