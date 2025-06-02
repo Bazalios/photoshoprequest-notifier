@@ -37,6 +37,10 @@
       margin-top: 10px;
       font-size: 0.9em;
     }
+    #clock {
+      font-size: 0.9em;
+      margin-bottom: 10px;
+    }
     #posts {
       width: 100%;
       max-width: 600px;
@@ -99,16 +103,17 @@
 </head>
 <body>
   <h1>📢 Novos Posts - r/PhotoshopRequest</h1>
+  <div id="clock"></div>
   <div id="status">Conectando ao servidor...</div>
   <button id="temaBtn">Alternar Tema</button>
   <div id="notificacao"></div>
   <div id="posts"></div>
 
   <script>
-    const posts = [];
-    const container = document.getElementById("posts");
     let socket;
     let reconnectInterval = 5000;
+    const posts = new Map();
+    const container = document.getElementById("posts");
 
     function detectarTag(titulo) {
       const t = titulo.toLowerCase();
@@ -129,11 +134,16 @@
       socket = new WebSocket("wss://reddit-ws-backend.onrender.com");
 
       socket.onopen = () => {
-        atualizarHorario("Conectado");
+        atualizarStatus("🟢 Conectado");
       };
 
       socket.onmessage = function (event) {
         const data = JSON.parse(event.data);
+        if (posts.has(data.id)) return; // evitar duplicatas
+        const hora = new Date().toLocaleTimeString();
+        posts.set(data.id, { ...data, hora });
+        if (posts.size > 10) posts.delete([...posts.keys()][0]);
+        atualizarPosts();
 
         if (Notification.permission === "granted") {
           const notification = new Notification("Novo post em r/PhotoshopRequest", {
@@ -147,16 +157,11 @@
           };
         }
 
-        const hora = new Date().toLocaleTimeString();
-        posts.unshift({ ...data, hora });
-        if (posts.length > 10) posts.pop();
-        atualizarPosts();
         criarNotificacaoVisual(data.title);
-        atualizarHorario("Última atualização: " + hora);
       };
 
       socket.onclose = () => {
-        atualizarHorario("Desconectado. Tentando reconectar...");
+        atualizarStatus("🔴 Desconectado. Reconectando...");
         setTimeout(() => conectarWebSocket(), reconnectInterval);
       };
 
@@ -167,7 +172,7 @@
 
     function atualizarPosts() {
       container.innerHTML = "";
-      posts.forEach(post => {
+      [...posts.values()].reverse().forEach(post => {
         const tag = detectarTag(post.title);
         const div = document.createElement("div");
         div.className = "post";
@@ -180,9 +185,14 @@
       });
     }
 
-    function atualizarHorario(texto) {
+    function atualizarStatus(texto) {
       document.getElementById("status").innerText = texto;
     }
+
+    function atualizarRelogio() {
+      document.getElementById("clock").innerText = new Date().toLocaleTimeString();
+    }
+    setInterval(atualizarRelogio, 1000);
 
     async function solicitarPermissaoNotificacao() {
       if (Notification.permission !== "granted") {
@@ -197,7 +207,6 @@
     }
 
     document.getElementById("temaBtn").addEventListener("click", alternarTema);
-
     solicitarPermissaoNotificacao();
     conectarWebSocket();
   </script>
