@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Novos posts do r/PhotoshopRequest</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 600px;
+      margin: 40px auto;
+      padding: 20px;
+      background-color: #f0f0f0;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    h1 {
+      text-align: center;
+      color: #ff4500;
+    }
+    ul {
+      list-style: none;
+      padding: 0;
+    }
+    li {
+      margin-bottom: 15px;
+      background: #fff;
+      padding: 10px;
+      border-left: 4px solid #ff4500;
+      border-radius: 4px;
+    }
+    a {
+      text-decoration: none;
+      color: #333;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+    button {
+      display: block;
+      margin: 20px auto;
+      padding: 10px 20px;
+      font-size: 16px;
+      background-color: #ff4500;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #e03d00;
+    }
+  </style>
+</head>
+<body>
+  <h1>Últimos posts - r/PhotoshopRequest</h1>
+  <button onclick="iniciar()">🔄 Atualizar agora</button>
+  <ul id="lista-posts">
+    <li>Carregando posts...</li>
+  </ul>
+
+  <!-- Som de alerta confiável -->
+  <audio id="somAlerta" src="https://github.com/notificationsounds/soundpack/raw/master/tones/piece-of-cake.mp3" preload="auto"></audio>
+
+  <script>
+    let ultimoPostId = null;
+    let som;
+    let intervalo = null;
+
+    async function buscarPosts(exibirNotificacao = true) {
+      const lista = document.getElementById('lista-posts');
+      const urlReddit = 'https://www.reddit.com/r/PhotoshopRequest/new.json?limit=10';
+      const urlProxy = `https://api.allorigins.win/get?url=${encodeURIComponent(urlReddit)}`;
+
+      try {
+        const resposta = await fetch(urlProxy);
+        const dadosJson = await resposta.json();
+        const dados = JSON.parse(dadosJson.contents);
+
+        const posts = dados.data.children;
+        lista.innerHTML = '';
+
+        posts.forEach((item, index) => {
+          const post = item.data;
+          const li = document.createElement('li');
+          li.innerHTML = `<a href="https://www.reddit.com${post.permalink}" target="_blank">${post.title}</a>`;
+          lista.appendChild(li);
+
+          if (index === 0 && post.id !== ultimoPostId) {
+            if (ultimoPostId && exibirNotificacao) {
+              mostrarNotificacao(post.title, `https://www.reddit.com${post.permalink}`);
+              if (som) {
+                som.currentTime = 0;
+                som.play().catch(e => console.warn("Erro ao tocar som:", e));
+              }
+            }
+            ultimoPostId = post.id;
+          }
+        });
+      } catch (erro) {
+        lista.innerHTML = '<li>Erro ao carregar os posts 😞</li>';
+        console.error('Erro ao buscar posts:', erro);
+      }
+    }
+
+    function mostrarNotificacao(titulo, link) {
+      if (Notification.permission === 'granted') {
+        const notificacao = new Notification('🆕 Novo post no r/PhotoshopRequest!', {
+          body: titulo,
+          icon: 'https://www.redditstatic.com/desktop2x/img/favicon/apple-icon-120x120.png'
+        });
+
+        notificacao.onclick = () => {
+          window.open(link, '_blank');
+        };
+      }
+    }
+
+    function iniciar() {
+      if ('Notification' in window && Notification.permission !== 'granted') {
+        Notification.requestPermission();
+      }
+
+      som = document.getElementById('somAlerta');
+      som.play().then(() => som.pause()).catch(() => {});
+
+      buscarPosts(false); // Primeira verificação
+
+      if (!intervalo) {
+        intervalo = setInterval(() => buscarPosts(true), 30000); // Agora com 30 segundos
+      }
+    }
+  </script>
+</body>
+</html>
