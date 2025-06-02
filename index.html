@@ -69,7 +69,7 @@
     async function buscarPosts(exibirNotificacao = true) {
       const lista = document.getElementById('lista-posts');
       const urlReddit = 'https://www.reddit.com/r/PhotoshopRequest/new.json?limit=10';
-      const urlProxy = `https://api.allorigins.win/get?url=${encodeURIComponent(urlReddit)}`;
+      const urlProxy = `https://corsproxy.io/?${encodeURIComponent(urlReddit)}`;
 
       try {
         const resposta = await fetch(urlProxy);
