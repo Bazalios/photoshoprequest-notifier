@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BBR">
 <head>
   <meta charset="UTF-8">
   <title>Notificador Reddit - r/PhotoshopRequest</title>
@@ -12,14 +12,12 @@
       --cor-borda: #ddd;
       --cor-destaque: #ff4500;
     }
-
     [data-tema="escuro"] {
       --cor-fundo: #121212;
       --cor-texto: #f5f5f5;
       --cor-card: #1e1e1e;
       --cor-borda: #333;
     }
-
     body {
       font-family: 'Inter', sans-serif;
       background-color: var(--cor-fundo);
@@ -30,22 +28,18 @@
       flex-direction: column;
       align-items: center;
     }
-
     h1 {
       color: var(--cor-destaque);
     }
-
     #status {
       margin-top: 10px;
       font-size: 0.9em;
     }
-
     #posts {
       width: 100%;
       max-width: 600px;
       margin-top: 30px;
     }
-
     .post {
       background: var(--cor-card);
       border: 1px solid var(--cor-borda);
@@ -55,17 +49,14 @@
       box-shadow: 0 2px 8px rgba(0,0,0,0.05);
       transition: transform 0.2s;
     }
-
     .post:hover {
       transform: scale(1.01);
     }
-
     .post a {
       color: var(--cor-destaque);
       text-decoration: none;
       font-weight: 600;
     }
-
     .notificacao {
       background-color: var(--cor-destaque);
       color: #fff;
@@ -74,12 +65,10 @@
       margin-top: 20px;
       animation: fadein 0.4s ease;
     }
-
     @keyframes fadein {
       from { opacity: 0; transform: translateY(-10px); }
       to { opacity: 1; transform: translateY(0); }
     }
-
     #temaBtn {
       margin-top: 20px;
       padding: 6px 12px;
@@ -93,14 +82,15 @@
 </head>
 <body>
   <h1>📢 Novos Posts - r/PhotoshopRequest</h1>
-  <div id="status">Carregando...</div>
+  <div id="status">Conectando ao servidor...</div>
   <button id="temaBtn">Alternar Tema</button>
   <div id="notificacao"></div>
   <div id="posts"></div>
 
   <script>
-    const redditUrl = "https://api.reddit.com/r/PhotoshopRequest/new?limit=10";
-    let lastPostId = null;
+    const socket = new WebSocket("wss://reddit-ws-backend.onrender.com");
+    const posts = [];
+    const container = document.getElementById("posts");
 
     function criarNotificacaoVisual(texto) {
       const div = document.createElement("div");
@@ -110,57 +100,44 @@
       document.getElementById("notificacao").appendChild(div);
     }
 
-    async function verificarNovosPosts() {
-      try {
-        const resposta = await fetch(redditUrl);
-        const dados = await resposta.json();
-        const posts = dados.data.children;
+    socket.onopen = () => {
+      atualizarHorario();
+    };
 
-        if (!posts || posts.length === 0) {
-          document.getElementById("status").innerText = "Nenhum post encontrado.";
-          return;
-        }
+    socket.onmessage = function (event) {
+      const data = JSON.parse(event.data);
 
-        const novoPostId = posts[0].data.id;
-
-        if (lastPostId && novoPostId !== lastPostId) {
-          mostrarNotificacao(posts[0].data);
-        }
-
-        lastPostId = novoPostId;
-        atualizarPosts(posts);
-        document.getElementById("status").innerText = "Última verificação: " + new Date().toLocaleTimeString();
-
-      } catch (erro) {
-        console.error("Erro ao carregar posts:", erro);
-        document.getElementById("status").innerText = "Erro ao carregar os posts 😞";
-      }
-    }
-
-    function atualizarPosts(posts) {
-      const container = document.getElementById("posts");
-      container.innerHTML = "";
-      posts.forEach(post => {
-        const div = document.createElement("div");
-        div.className = "post";
-        div.innerHTML = `<a href="https://reddit.com${post.data.permalink}" target="_blank">${post.data.title}</a>`;
-        container.appendChild(div);
-      });
-    }
-
-    function mostrarNotificacao(post) {
       if (Notification.permission === "granted") {
         const notification = new Notification("Novo post em r/PhotoshopRequest", {
-          body: post.title,
+          body: data.title,
           icon: "https://www.redditstatic.com/desktop2x/img/favicon/android-icon-192x192.png",
-          data: { url: "https://reddit.com" + post.permalink }
+          data: { url: data.url }
         });
         notification.onclick = function (e) {
           e.preventDefault();
           window.open(notification.data.url, '_blank');
         };
       }
-      criarNotificacaoVisual(post.title);
+
+      criarNotificacaoVisual(data.title);
+      posts.unshift({ ...data, hora: new Date().toLocaleTimeString() });
+      if (posts.length > 10) posts.pop();
+      atualizarPosts();
+      atualizarHorario();
+    };
+
+    function atualizarPosts() {
+      container.innerHTML = "";
+      posts.forEach(post => {
+        const div = document.createElement("div");
+        div.className = "post";
+        div.innerHTML = `<a href="${post.url}" target="_blank">${post.title}</a><br><small>Recebido às ${post.hora}</small>`;
+        container.appendChild(div);
+      });
+    }
+
+    function atualizarHorario() {
+      document.getElementById("status").innerText = "Última atualização: " + new Date().toLocaleTimeString();
     }
 
     async function solicitarPermissaoNotificacao() {
@@ -176,10 +153,7 @@
     }
 
     document.getElementById("temaBtn").addEventListener("click", alternarTema);
-
     solicitarPermissaoNotificacao();
-    verificarNovosPosts();
-    setInterval(verificarNovosPosts, 30000);
   </script>
 </body>
 </html>
