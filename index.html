@@ -58,7 +58,6 @@
     <li>Carregando posts...</li>
   </ul>
 
-  <!-- Som de alerta confiável -->
   <audio id="somAlerta" src="https://github.com/notificationsounds/soundpack/raw/master/tones/piece-of-cake.mp3" preload="auto"></audio>
 
   <script>
@@ -69,12 +68,11 @@
     async function buscarPosts(exibirNotificacao = true) {
       const lista = document.getElementById('lista-posts');
       const urlReddit = 'https://www.reddit.com/r/PhotoshopRequest/new.json?limit=10';
-      const urlProxy = `https://corsproxy.io/?${encodeURIComponent(urlReddit)}`;
+      const urlProxy = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(urlReddit)}`;
 
       try {
         const resposta = await fetch(urlProxy);
-        const dadosJson = await resposta.json();
-        const dados = JSON.parse(dadosJson.contents);
+        const dados = await resposta.json();
 
         const posts = dados.data.children;
         lista.innerHTML = '';
@@ -126,7 +124,7 @@
       buscarPosts(false); // Primeira verificação
 
       if (!intervalo) {
-        intervalo = setInterval(() => buscarPosts(true), 30000); // Agora com 30 segundos
+        intervalo = setInterval(() => buscarPosts(true), 30000); // Verifica a cada 30s
       }
     }
   </script>
