@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BBR">
+<html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
   <title>Notificador Reddit - r/PhotoshopRequest</title>
@@ -11,6 +11,8 @@
       --cor-card: #ffffff;
       --cor-borda: #ddd;
       --cor-destaque: #ff4500;
+      --cor-tag-pago: #ffd700;
+      --cor-tag-free: #00c853;
     }
     [data-tema="escuro"] {
       --cor-fundo: #121212;
@@ -57,6 +59,21 @@
       text-decoration: none;
       font-weight: 600;
     }
+    .tag {
+      font-size: 12px;
+      font-weight: bold;
+      padding: 2px 6px;
+      border-radius: 4px;
+      margin-left: 8px;
+    }
+    .tag.pago {
+      background: var(--cor-tag-pago);
+      color: #000;
+    }
+    .tag.free {
+      background: var(--cor-tag-free);
+      color: #fff;
+    }
     .notificacao {
       background-color: var(--cor-destaque);
       color: #fff;
@@ -92,6 +109,13 @@
     const posts = [];
     const container = document.getElementById("posts");
 
+    function detectarTag(titulo) {
+      const t = titulo.toLowerCase();
+      if (t.includes("paid") || t.includes("tip") || t.includes("payment")) return { texto: "💰 Pago", classe: "pago" };
+      if (t.includes("free") || t.includes("unpaid") || t.includes("volunteer")) return { texto: "🆓 Grátis", classe: "free" };
+      return null;
+    }
+
     function criarNotificacaoVisual(texto) {
       const div = document.createElement("div");
       div.className = "notificacao";
@@ -119,19 +143,25 @@
         };
       }
 
-      criarNotificacaoVisual(data.title);
-      posts.unshift({ ...data, hora: new Date().toLocaleTimeString() });
+      const hora = new Date().toLocaleTimeString();
+      posts.unshift({ ...data, hora });
       if (posts.length > 10) posts.pop();
       atualizarPosts();
+      criarNotificacaoVisual(data.title);
       atualizarHorario();
     };
 
     function atualizarPosts() {
       container.innerHTML = "";
       posts.forEach(post => {
+        const tag = detectarTag(post.title);
         const div = document.createElement("div");
         div.className = "post";
-        div.innerHTML = `<a href="${post.url}" target="_blank">${post.title}</a><br><small>Recebido às ${post.hora}</small>`;
+        div.innerHTML = `
+          <a href="${post.url}" target="_blank">${post.title}</a>
+          ${tag ? `<span class="tag ${tag.classe}">${tag.texto}</span>` : ""}
+          <br><small>Recebido às ${post.hora}</small>
+        `;
         container.appendChild(div);
       });
     }
