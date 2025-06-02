@@ -105,9 +105,10 @@
   <div id="posts"></div>
 
   <script>
-    const socket = new WebSocket("wss://reddit-ws-backend.onrender.com");
     const posts = [];
     const container = document.getElementById("posts");
+    let socket;
+    let reconnectInterval = 5000;
 
     function detectarTag(titulo) {
       const t = titulo.toLowerCase();
@@ -124,32 +125,45 @@
       document.getElementById("notificacao").appendChild(div);
     }
 
-    socket.onopen = () => {
-      atualizarHorario();
-    };
+    function conectarWebSocket() {
+      socket = new WebSocket("wss://reddit-ws-backend.onrender.com");
 
-    socket.onmessage = function (event) {
-      const data = JSON.parse(event.data);
+      socket.onopen = () => {
+        atualizarHorario("Conectado");
+      };
 
-      if (Notification.permission === "granted") {
-        const notification = new Notification("Novo post em r/PhotoshopRequest", {
-          body: data.title,
-          icon: "https://www.redditstatic.com/desktop2x/img/favicon/android-icon-192x192.png",
-          data: { url: data.url }
-        });
-        notification.onclick = function (e) {
-          e.preventDefault();
-          window.open(notification.data.url, '_blank');
-        };
-      }
+      socket.onmessage = function (event) {
+        const data = JSON.parse(event.data);
 
-      const hora = new Date().toLocaleTimeString();
-      posts.unshift({ ...data, hora });
-      if (posts.length > 10) posts.pop();
-      atualizarPosts();
-      criarNotificacaoVisual(data.title);
-      atualizarHorario();
-    };
+        if (Notification.permission === "granted") {
+          const notification = new Notification("Novo post em r/PhotoshopRequest", {
+            body: data.title,
+            icon: "https://www.redditstatic.com/desktop2x/img/favicon/android-icon-192x192.png",
+            data: { url: data.url }
+          });
+          notification.onclick = function (e) {
+            e.preventDefault();
+            window.open(notification.data.url, '_blank');
+          };
+        }
+
+        const hora = new Date().toLocaleTimeString();
+        posts.unshift({ ...data, hora });
+        if (posts.length > 10) posts.pop();
+        atualizarPosts();
+        criarNotificacaoVisual(data.title);
+        atualizarHorario("Última atualização: " + hora);
+      };
+
+      socket.onclose = () => {
+        atualizarHorario("Desconectado. Tentando reconectar...");
+        setTimeout(() => conectarWebSocket(), reconnectInterval);
+      };
+
+      socket.onerror = () => {
+        socket.close();
+      };
+    }
 
     function atualizarPosts() {
       container.innerHTML = "";
@@ -166,8 +180,8 @@
       });
     }
 
-    function atualizarHorario() {
-      document.getElementById("status").innerText = "Última atualização: " + new Date().toLocaleTimeString();
+    function atualizarHorario(texto) {
+      document.getElementById("status").innerText = texto;
     }
 
     async function solicitarPermissaoNotificacao() {
@@ -183,7 +197,9 @@
     }
 
     document.getElementById("temaBtn").addEventListener("click", alternarTema);
+
     solicitarPermissaoNotificacao();
+    conectarWebSocket();
   </script>
 </body>
 </html>
