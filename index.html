@@ -96,24 +96,20 @@
 
   <script>
     const posts = new Map();
+    const notified = new Set();
     const postContainer = document.getElementById("posts");
     const paidSound = document.getElementById("paidSound");
-    let lastPostId = null;
-    let initialized = false;
 
     async function fetchPosts() {
       try {
-        const res = await fetch("https://www.reddit.com/r/PhotoshopRequest/new.json?limit=100");
+        const res = await fetch("https://www.reddit.com/r/PhotoshopRequest/new.json?limit=5");
         const data = await res.json();
         const now = Date.now();
-        const sixtyMinAgo = now - 60 * 60 * 1000;
-        const postsLastHour = [];
-        const newPosts = [];
+        const timestamps = [];
 
         data.data.children.reverse().forEach(post => {
           const p = post.data;
           const createdTime = new Date(p.created_utc * 1000);
-          if (createdTime.getTime() >= sixtyMinAgo) postsLastHour.push(createdTime.getTime());
 
           if (!posts.has(p.id)) {
             posts.set(p.id, {
@@ -124,36 +120,36 @@
               timestamp: createdTime.getTime(),
               flair: p.link_flair_text || null
             });
-            if (initialized) newPosts.push(p);
-            lastPostId = p.id;
+
+            if (!notified.has(p.id)) {
+              notified.add(p.id);
+              if (Notification.permission === "granted") {
+                const n = new Notification("💰 New post on r/PhotoshopRequest", {
+                  body: p.title,
+                  icon: "https://www.redditstatic.com/desktop2x/img/favicon/android-icon-192x192.png",
+                  data: { url: 'https://reddit.com' + p.permalink }
+                });
+                n.onclick = e => {
+                  e.preventDefault();
+                  window.open(n.data.url, '_blank');
+                };
+              }
+              if ((p.link_flair_text || '').toLowerCase().includes("paid")) {
+                paidSound.play().catch(() => {});
+              }
+            }
+          }
+
+          if (createdTime.getTime() >= now - 3600000) {
+            timestamps.push(createdTime.getTime());
           }
         });
 
         while (posts.size > 5) posts.delete(posts.keys().next().value);
 
-        if (newPosts.length > 0) {
-          const latest = newPosts[newPosts.length - 1];
-          const flair = latest.link_flair_text ? latest.link_flair_text.toLowerCase() : "";
-
-          if (Notification.permission === "granted") {
-            const n = new Notification("💰 New post on r/PhotoshopRequest", {
-              body: latest.title,
-              icon: "https://www.redditstatic.com/desktop2x/img/favicon/android-icon-192x192.png",
-              data: { url: 'https://reddit.com' + latest.permalink }
-            });
-            n.onclick = e => {
-              e.preventDefault();
-              window.open(n.data.url, '_blank');
-            };
-          }
-
-          if (flair.includes("paid")) paidSound.play().catch(() => {});
-        }
-
         renderPosts();
         updateStatus("Last update: " + new Date().toLocaleTimeString());
-        updateAverage(postsLastHour);
-        initialized = true;
+        updateAverage(timestamps);
       } catch (err) {
         console.error("Failed to fetch posts:", err);
         updateStatus("❌ Failed to load posts");
