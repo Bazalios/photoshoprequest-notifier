@@ -11,15 +11,15 @@
       --cor-card: #ffffff;
       --cor-borda: #ddd;
       --cor-destaque: #ff4500;
+      --cor-tag-pago: #ffd700;
+      --cor-tag-free: #00c853;
     }
-
     [data-tema="escuro"] {
       --cor-fundo: #121212;
       --cor-texto: #f5f5f5;
       --cor-card: #1e1e1e;
       --cor-borda: #333;
     }
-
     body {
       font-family: 'Inter', sans-serif;
       background-color: var(--cor-fundo);
@@ -30,22 +30,18 @@
       flex-direction: column;
       align-items: center;
     }
-
     h1 {
       color: var(--cor-destaque);
     }
-
-    #status {
-      margin-top: 10px;
+    #status, #clock, #mediaTempo {
       font-size: 0.9em;
+      margin: 5px 0;
     }
-
     #posts {
       width: 100%;
       max-width: 600px;
-      margin-top: 30px;
+      margin-top: 20px;
     }
-
     .post {
       background: var(--cor-card);
       border: 1px solid var(--cor-borda);
@@ -55,17 +51,29 @@
       box-shadow: 0 2px 8px rgba(0,0,0,0.05);
       transition: transform 0.2s;
     }
-
     .post:hover {
       transform: scale(1.01);
     }
-
     .post a {
       color: var(--cor-destaque);
       text-decoration: none;
       font-weight: 600;
     }
-
+    .tag {
+      font-size: 12px;
+      font-weight: bold;
+      padding: 2px 6px;
+      border-radius: 4px;
+      margin-left: 8px;
+    }
+    .tag.pago {
+      background: var(--cor-tag-pago);
+      color: #000;
+    }
+    .tag.free {
+      background: var(--cor-tag-free);
+      color: #fff;
+    }
     .notificacao {
       background-color: var(--cor-destaque);
       color: #fff;
@@ -74,14 +82,12 @@
       margin-top: 20px;
       animation: fadein 0.4s ease;
     }
-
     @keyframes fadein {
       from { opacity: 0; transform: translateY(-10px); }
       to { opacity: 1; transform: translateY(0); }
     }
-
     #temaBtn {
-      margin-top: 20px;
+      margin-top: 10px;
       padding: 6px 12px;
       border: none;
       background: var(--cor-destaque);
@@ -93,75 +99,120 @@
 </head>
 <body>
   <h1>📢 Novos Posts - r/PhotoshopRequest</h1>
-  <div id="status">Carregando...</div>
+  <div id="clock"></div>
+  <div id="status">Verificando posts...</div>
+  <div id="mediaTempo">⏱ Média: --</div>
   <button id="temaBtn">Alternar Tema</button>
   <div id="notificacao"></div>
   <div id="posts"></div>
+  <audio id="audioPago" src="som.mp3" preload="auto"></audio>
 
   <script>
-    const redditUrl = "https://api.reddit.com/r/PhotoshopRequest/new?limit=10";
-    let lastPostId = null;
+    const posts = new Map();
+    const tempos = [];
+    const container = document.getElementById("posts");
+    let ultimoPostId = null;
+    const audioPago = document.getElementById("audioPago");
 
-    function criarNotificacaoVisual(texto) {
-      const div = document.createElement("div");
-      div.className = "notificacao";
-      div.innerText = texto;
-      document.getElementById("notificacao").innerHTML = "";
-      document.getElementById("notificacao").appendChild(div);
+    function detectarTag(flair) {
+      if (!flair) return null;
+      const flairText = flair.toLowerCase();
+      if (flairText.includes("paid")) return { texto: "💰 Pago", classe: "pago" };
+      if (flairText.includes("free")) return { texto: "🆓 Grátis", classe: "free" };
+      return null;
     }
 
     async function verificarNovosPosts() {
       try {
-        const resposta = await fetch(redditUrl);
-        const dados = await resposta.json();
-        const posts = dados.data.children;
+        const res = await fetch("https://www.reddit.com/r/PhotoshopRequest/new.json?limit=10");
+        const dados = await res.json();
+        const novos = [];
+        const agora = Date.now();
 
-        if (!posts || posts.length === 0) {
-          document.getElementById("status").innerText = "Nenhum post encontrado.";
-          return;
+        dados.data.children.reverse().forEach(post => {
+          const p = post.data;
+          if (!posts.has(p.id)) {
+            const hora = new Date().toLocaleTimeString();
+            posts.set(p.id, {
+              id: p.id,
+              title: p.title,
+              url: 'https://reddit.com' + p.permalink,
+              hora,
+              timestamp: agora,
+              flair: p.link_flair_text || null
+            });
+            novos.push(p);
+            if (ultimoPostId) {
+              const diff = Math.round((agora - [...posts.values()][posts.size - 2].timestamp) / 1000);
+              tempos.push(diff);
+              if (tempos.length > 10) tempos.shift();
+              atualizarMedia();
+            }
+            ultimoPostId = p.id;
+          }
+        });
+
+        while (posts.size > 10) posts.delete(posts.keys().next().value);
+
+        if (novos.length > 0) {
+          const primeiro = novos[novos.length - 1];
+          const flair = primeiro.link_flair_text ? primeiro.link_flair_text.toLowerCase() : "";
+
+          if (Notification.permission === "granted") {
+            const notification = new Notification("Novo post em r/PhotoshopRequest", {
+              body: primeiro.title,
+              icon: "https://www.redditstatic.com/desktop2x/img/favicon/android-icon-192x192.png",
+              data: { url: 'https://reddit.com' + primeiro.permalink }
+            });
+            notification.onclick = (e) => {
+              e.preventDefault();
+              window.open(notification.data.url, '_blank');
+            };
+          }
+
+          if (flair.includes("paid")) audioPago.play();
         }
 
-        const novoPostId = posts[0].data.id;
+        atualizarPosts();
+        atualizarStatus("Última atualização: " + new Date().toLocaleTimeString());
 
-        if (lastPostId && novoPostId !== lastPostId) {
-          mostrarNotificacao(posts[0].data);
-        }
-
-        lastPostId = novoPostId;
-        atualizarPosts(posts);
-        document.getElementById("status").innerText = "Última verificação: " + new Date().toLocaleTimeString();
-
-      } catch (erro) {
-        console.error("Erro ao carregar posts:", erro);
-        document.getElementById("status").innerText = "Erro ao carregar os posts 😞";
+      } catch (e) {
+        console.error("Erro ao verificar posts:", e);
+        atualizarStatus("Erro ao carregar os posts 😞");
       }
     }
 
-    function atualizarPosts(posts) {
-      const container = document.getElementById("posts");
+    function atualizarPosts() {
       container.innerHTML = "";
-      posts.forEach(post => {
+      [...posts.values()].reverse().forEach(post => {
+        const tag = detectarTag(post.flair);
         const div = document.createElement("div");
         div.className = "post";
-        div.innerHTML = `<a href="https://reddit.com${post.data.permalink}" target="_blank">${post.data.title}</a>`;
+        div.innerHTML = `
+          <a href="${post.url}" target="_blank">${post.title}</a>
+          ${tag ? `<span class="tag ${tag.classe}">${tag.texto}</span>` : ""}
+          <br><small>Recebido às ${post.hora}</small>
+        `;
         container.appendChild(div);
       });
     }
 
-    function mostrarNotificacao(post) {
-      if (Notification.permission === "granted") {
-        const notification = new Notification("Novo post em r/PhotoshopRequest", {
-          body: post.title,
-          icon: "https://www.redditstatic.com/desktop2x/img/favicon/android-icon-192x192.png",
-          data: { url: "https://reddit.com" + post.permalink }
-        });
-        notification.onclick = function (e) {
-          e.preventDefault();
-          window.open(notification.data.url, '_blank');
-        };
-      }
-      criarNotificacaoVisual(post.title);
+    function atualizarMedia() {
+      const media = Math.round(tempos.reduce((a, b) => a + b, 0) / tempos.length || 0);
+      const min = Math.floor(media / 60);
+      const seg = media % 60;
+      document.getElementById("mediaTempo").innerText = `⏱ Média: ${min} min ${seg} s entre posts`;
     }
+
+    function atualizarStatus(texto) {
+      document.getElementById("status").innerText = texto;
+    }
+
+    function atualizarRelogio() {
+      document.getElementById("clock").innerText = new Date().toLocaleTimeString();
+    }
+    setInterval(atualizarRelogio, 1000);
+    setInterval(verificarNovosPosts, 30000);
 
     async function solicitarPermissaoNotificacao() {
       if (Notification.permission !== "granted") {
@@ -179,7 +230,6 @@
 
     solicitarPermissaoNotificacao();
     verificarNovosPosts();
-    setInterval(verificarNovosPosts, 30000);
   </script>
 </body>
 </html>
