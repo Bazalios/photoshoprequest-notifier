@@ -86,8 +86,8 @@
       from { opacity: 0; transform: translateY(-10px); }
       to { opacity: 1; transform: translateY(0); }
     }
-    #temaBtn {
-      margin-top: 10px;
+    #temaBtn, #toggleLang {
+      margin: 10px 5px;
       padding: 6px 12px;
       border: none;
       background: var(--cor-destaque);
@@ -98,11 +98,14 @@
   </style>
 </head>
 <body>
-  <h1>📢 Novos Posts - r/PhotoshopRequest</h1>
+  <h1 data-i18n="title">📢 Novos Posts - r/PhotoshopRequest</h1>
   <div id="clock"></div>
-  <div id="status">Verificando posts...</div>
+  <div id="status" data-i18n="checking">Verificando posts...</div>
   <div id="mediaTempo">⏱ Média: --</div>
-  <button id="temaBtn">Alternar Tema</button>
+  <div>
+    <button id="temaBtn">Alternar Tema</button>
+    <button id="toggleLang">English</button>
+  </div>
   <div id="notificacao"></div>
   <div id="posts"></div>
   <audio id="audioPago" src="som.mp3" preload="auto"></audio>
@@ -110,76 +113,106 @@
   <script>
     const posts = new Map();
     const tempos = [];
+    const notificados = [];
     const container = document.getElementById("posts");
-    let ultimoPostId = null;
     const audioPago = document.getElementById("audioPago");
+    let idioma = 'pt-BR';
 
-    function detectarTag(flair) {
-      if (!flair) return null;
-      const flairText = flair.toLowerCase();
-      if (flairText.includes("paid")) return { texto: "💰 Pago", classe: "pago" };
-      if (flairText.includes("free")) return { texto: "🆓 Grátis", classe: "free" };
-      return null;
+    const traducoes = {
+      'pt-BR': {
+        title: '📢 Novos Posts - r/PhotoshopRequest',
+        checking: 'Verificando posts...',
+        pago: '💰 Pago',
+        gratis: '🆓 Grátis',
+        postado: 'Postado às',
+        media: '⏱ Média: {MIN} min {SEG} s entre posts',
+        notificacao: '💰 Novo post em r/PhotoshopRequest'
+      },
+      'en': {
+        title: '📢 New Posts - r/PhotoshopRequest',
+        checking: 'Checking posts...',
+        pago: '💰 Paid',
+        gratis: '🆓 Free',
+        postado: 'Posted at',
+        media: '⏱ Avg: {MIN} min {SEG} s between posts',
+        notificacao: '💰 New post on r/PhotoshopRequest'
+      }
+    };
+
+    function traduzirTexto(texto) {
+      if (idioma === 'en') return texto.replace('Pago', 'Paid').replace('Grátis', 'Free');
+      if (idioma === 'pt-BR') return texto.replace('Paid', 'Pago').replace('Free', 'Grátis');
+      return texto;
     }
 
     async function verificarNovosPosts() {
       try {
-        const res = await fetch("https://www.reddit.com/r/PhotoshopRequest/new.json?limit=10");
+        const res = await fetch("https://www.reddit.com/r/PhotoshopRequest/new.json?limit=5");
         const dados = await res.json();
-        const novos = [];
         const agora = Date.now();
 
         dados.data.children.reverse().forEach(post => {
           const p = post.data;
           if (!posts.has(p.id)) {
-            const hora = new Date().toLocaleTimeString();
+            const dataHora = new Date(p.created_utc * 1000);
+            const hora = dataHora.toLocaleTimeString();
+            const tituloTraduzido = traduzirTexto(p.title);
             posts.set(p.id, {
               id: p.id,
-              title: p.title,
+              title: tituloTraduzido,
               url: 'https://reddit.com' + p.permalink,
               hora,
-              timestamp: agora,
+              timestamp: dataHora.getTime(),
               flair: p.link_flair_text || null
             });
-            novos.push(p);
-            if (ultimoPostId) {
-              const diff = Math.round((agora - [...posts.values()][posts.size - 2].timestamp) / 1000);
-              tempos.push(diff);
-              if (tempos.length > 10) tempos.shift();
-              atualizarMedia();
+
+            if (!notificados.includes(p.id)) {
+              notificados.push(p.id);
+              if (notificados.length > 10) notificados.shift();
+
+              if (Notification.permission === "granted") {
+                const n = new Notification(traducoes[idioma].notificacao, {
+                  body: tituloTraduzido,
+                  icon: "https://www.redditstatic.com/desktop2x/img/favicon/android-icon-192x192.png",
+                  data: { url: 'https://reddit.com' + p.permalink }
+                });
+                n.onclick = e => {
+                  e.preventDefault();
+                  window.open(n.data.url, '_blank');
+                };
+              }
+
+              if ((p.link_flair_text || '').toLowerCase().includes("paid")) {
+                audioPago.play().catch(err => console.warn("Erro ao tocar o som:", err));
+              }
+
+              if (posts.size > 1) {
+                const anterior = [...posts.values()][posts.size - 2];
+                const diff = Math.round((dataHora.getTime() - anterior.timestamp) / 1000);
+                tempos.push(diff);
+                if (tempos.length > 10) tempos.shift();
+                atualizarMedia();
+              }
             }
-            ultimoPostId = p.id;
           }
         });
 
-        while (posts.size > 10) posts.delete(posts.keys().next().value);
-
-        if (novos.length > 0) {
-          const primeiro = novos[novos.length - 1];
-          const flair = primeiro.link_flair_text ? primeiro.link_flair_text.toLowerCase() : "";
-
-          if (Notification.permission === "granted") {
-            const notification = new Notification("Novo post em r/PhotoshopRequest", {
-              body: primeiro.title,
-              icon: "https://www.redditstatic.com/desktop2x/img/favicon/android-icon-192x192.png",
-              data: { url: 'https://reddit.com' + primeiro.permalink }
-            });
-            notification.onclick = (e) => {
-              e.preventDefault();
-              window.open(notification.data.url, '_blank');
-            };
-          }
-
-          if (flair.includes("paid")) audioPago.play();
-        }
+        while (posts.size > 5) posts.delete(posts.keys().next().value);
 
         atualizarPosts();
         atualizarStatus("Última atualização: " + new Date().toLocaleTimeString());
-
       } catch (e) {
         console.error("Erro ao verificar posts:", e);
         atualizarStatus("Erro ao carregar os posts 😞");
       }
+    }
+
+    function detectarTag(flair) {
+      if (!flair) return null;
+      const f = flair.toLowerCase();
+      if (f.includes("paid")) return { texto: traducoes[idioma].pago, classe: "pago" };
+      if (f.includes("free")) return { texto: traducoes[idioma].gratis, classe: "free" };
+      return null;
     }
 
     function atualizarPosts() {
@@ -191,7 +224,7 @@
         div.innerHTML = `
           <a href="${post.url}" target="_blank">${post.title}</a>
           ${tag ? `<span class="tag ${tag.classe}">${tag.texto}</span>` : ""}
-          <br><small>Recebido às ${post.hora}</small>
+          <br><small>${traducoes[idioma].postado} ${post.hora}</small>
         `;
         container.appendChild(div);
       });
@@ -201,7 +234,8 @@
       const media = Math.round(tempos.reduce((a, b) => a + b, 0) / tempos.length || 0);
       const min = Math.floor(media / 60);
       const seg = media % 60;
-      document.getElementById("mediaTempo").innerText = `⏱ Média: ${min} min ${seg} s entre posts`;
+      document.getElementById("mediaTempo").innerText =
+        traducoes[idioma].media.replace('{MIN}', min).replace('{SEG}', seg);
     }
 
     function atualizarStatus(texto) {
@@ -211,25 +245,31 @@
     function atualizarRelogio() {
       document.getElementById("clock").innerText = new Date().toLocaleTimeString();
     }
-    setInterval(atualizarRelogio, 1000);
-    setInterval(verificarNovosPosts, 30000);
-
-    async function solicitarPermissaoNotificacao() {
-      if (Notification.permission !== "granted") {
-        await Notification.requestPermission();
-      }
-    }
 
     function alternarTema() {
       const html = document.documentElement;
-      const temaAtual = html.getAttribute("data-tema");
-      html.setAttribute("data-tema", temaAtual === "escuro" ? "claro" : "escuro");
+      const atual = html.getAttribute("data-tema") || "claro";
+      html.setAttribute("data-tema", atual === "escuro" ? "claro" : "escuro");
     }
 
     document.getElementById("temaBtn").addEventListener("click", alternarTema);
 
-    solicitarPermissaoNotificacao();
+    document.getElementById("toggleLang").addEventListener("click", () => {
+      idioma = idioma === 'pt-BR' ? 'en' : 'pt-BR';
+      document.querySelectorAll("[data-i18n]").forEach(el => {
+        const chave = el.getAttribute("data-i18n");
+        el.innerText = traducoes[idioma][chave] || el.innerText;
+      });
+      atualizarPosts();
+      atualizarMedia();
+      document.getElementById("toggleLang").innerText = idioma === 'pt-BR' ? 'English' : 'Português';
+    });
+
+    setInterval(atualizarRelogio, 1000);
+    setInterval(verificarNovosPosts, 30000);
+    Notification.requestPermission();
     verificarNovosPosts();
+    document.getElementById("toggleLang").innerText = idioma === 'pt-BR' ? 'English' : 'Português';
   </script>
 </body>
 </html>
