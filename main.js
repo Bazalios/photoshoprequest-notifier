@@ -2,7 +2,25 @@ const posts = new Map();
 const postContainer = document.getElementById("posts");
 const paidSound = document.getElementById("paidSound");
 const filterSelect = document.getElementById("filter");
+const toggleNotif = document.getElementById("enableNotif");
+const paidChk = document.getElementById("paidChk");
+const freeChk = document.getElementById("freeChk");
+const onlineCountDisplay = document.getElementById("onlineCount");
 let failCount = 0;
+
+const visitorId = Date.now() + "-" + Math.random().toString(36).substr(2);
+function updateOnline() {
+  const key = "visitors";
+  const now = Date.now();
+  const data = JSON.parse(localStorage.getItem(key) || "[]")
+    .filter(entry => now - entry.time < 60000);
+  data.push({ id: visitorId, time: now });
+  localStorage.setItem(key, JSON.stringify(data));
+  const count = new Set(data.map(v => v.id)).size;
+  onlineCountDisplay.innerText = count + " online";
+}
+setInterval(updateOnline, 10000);
+updateOnline();
 
 const notified = new Set(JSON.parse(localStorage.getItem("notifiedIds") || "[]"));
 
@@ -22,7 +40,6 @@ document.getElementById("themeBtn").addEventListener("click", () => {
 });
 
 filterSelect.addEventListener("change", renderPosts);
-
 Notification.requestPermission();
 setInterval(updateClock, 1000);
 setInterval(fetchPosts, 10000);
@@ -42,30 +59,34 @@ async function fetchPosts() {
     data.data.children.reverse().forEach(post => {
       const p = post.data;
       const createdTime = new Date(p.created_utc * 1000);
+      const isPaid = (p.link_flair_text || '').toLowerCase().includes("paid") ||
+                     p.title.toLowerCase().includes("paid");
+      const isFree = (p.link_flair_text || '').toLowerCase().includes("free") ||
+                     p.title.toLowerCase().includes("free");
+      const flair = p.link_flair_text || (isPaid ? "Paid" : isFree ? "Free" : null);
 
-      if (!posts.has(p.id)) {
-        const isPaid = (p.link_flair_text || '').toLowerCase().includes("paid") ||
-                       p.title.toLowerCase().includes("paid");
+      const existing = posts.get(p.id);
+      const postObj = {
+        id: p.id,
+        title: p.title,
+        url: 'https://reddit.com' + p.permalink,
+        time: createdTime.toLocaleTimeString(),
+        timestamp: createdTime.getTime(),
+        flair: flair,
+        comments: p.num_comments,
+        isNew: !notified.has(p.id)
+      };
 
-        const isFree = (p.link_flair_text || '').toLowerCase().includes("free") ||
-                       p.title.toLowerCase().includes("free");
+      if (!existing || existing.comments !== p.num_comments) {
+        posts.set(p.id, postObj);
+      }
 
-        const flair = p.link_flair_text || (isPaid ? "Paid" : isFree ? "Free" : null);
+      if (!notified.has(p.id)) {
+        notified.add(p.id);
+        localStorage.setItem("notifiedIds", JSON.stringify([...notified]));
 
-        posts.set(p.id, {
-          id: p.id,
-          title: p.title,
-          url: 'https://reddit.com' + p.permalink,
-          time: createdTime.toLocaleTimeString(),
-          timestamp: createdTime.getTime(),
-          flair: flair,
-          isNew: !notified.has(p.id)
-        });
-
-        if (!notified.has(p.id)) {
-          notified.add(p.id);
-          localStorage.setItem("notifiedIds", JSON.stringify([...notified]));
-
+        if (toggleNotif.checked &&
+            ((paidChk.checked && isPaid) || (freeChk.checked && isFree))) {
           if (Notification.permission === "granted") {
             const n = new Notification("📢 New post on r/PhotoshopRequest", {
               body: p.title,
@@ -77,14 +98,13 @@ async function fetchPosts() {
               window.open(n.data.url, '_blank');
             };
           }
-
           if (isPaid) {
             paidSound.play().catch(() => {});
           }
         }
       }
 
-      if (createdTime.getTime() >= now - 3600000) {
+      if (createdTime.getTime() >= now - 7200000) {
         timestamps.push(createdTime.getTime());
       }
     });
@@ -114,13 +134,10 @@ function renderPosts() {
 
     const div = document.createElement("div");
     div.className = "post";
-    if (post.isNew) {
-      post.isNew = false;
-    }
     div.innerHTML = `
       <a href="${post.url}" target="_blank">${post.title}</a>
       ${tag ? `<span class="tag ${tag.class}">${tag.text}</span>` : ""}
-      <br><small>Posted at ${post.time}</small>
+      <br><small>🕒 ${post.time} | 💬 ${post.comments} comments</small>
     `;
     postContainer.appendChild(div);
   });
@@ -147,7 +164,7 @@ function updateAverage(timestamps) {
   const avgSec = Math.round((totalDiff / (timestamps.length - 1)) / 1000);
   const min = Math.floor(avgSec / 60);
   const sec = avgSec % 60;
-  document.getElementById("avgTime").innerText = `⏱ Average: ${min} min ${sec} s between posts`;
+  document.getElementById("avgTime").innerText = `⏱ Average (120min): ${min} min ${sec} s between posts`;
 }
 
 function updateStatus(msg) {

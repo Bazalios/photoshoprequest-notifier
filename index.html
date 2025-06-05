@@ -12,6 +12,7 @@
   <div id="clock"></div>
   <div id="status">Checking posts...</div>
   <div id="avgTime">⏱ Average: --</div>
+  <div id="onlineCount">0 online</div>
   <div style="margin: 10px 0;">
     <select id="filter">
       <option value="all">All</option>
@@ -20,6 +21,11 @@
     </select>
     <button id="refreshBtn">🔄 Atualizar agora</button>
     <button id="themeBtn">Toggle Theme</button>
+  </div>
+  <div>
+    <label><input type="checkbox" id="enableNotif" checked> 🔔 Receber notificações</label><br>
+    <label><input type="checkbox" id="paidChk" checked> 💰 Paid</label>
+    <label><input type="checkbox" id="freeChk" checked> 🆓 Free</label>
   </div>
   <div id="posts"></div>
   <audio id="paidSound" src="som.mp3" preload="auto"></audio>
