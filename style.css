@@ -1,0 +1,84 @@
+:root {
+  --bg-color: #f9f9f9;
+  --text-color: #333;
+  --card-color: #ffffff;
+  --border-color: #ddd;
+  --accent-color: #ff4500;
+  --tag-paid: #ffd700;
+  --tag-free: #00c853;
+}
+[data-theme="dark"] {
+  --bg-color: #121212;
+  --text-color: #f5f5f5;
+  --card-color: #1e1e1e;
+  --border-color: #333;
+}
+body {
+  font-family: 'Inter', sans-serif;
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  margin: 0;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+h1 {
+  color: var(--accent-color);
+}
+#status, #clock, #avgTime {
+  font-size: 0.9em;
+  margin: 5px 0;
+}
+#posts {
+  width: 100%;
+  max-width: 600px;
+  margin-top: 20px;
+}
+.post {
+  background: var(--card-color);
+  border: 1px solid var(--border-color);
+  padding: 15px;
+  margin-bottom: 15px;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  transform: translateY(10px);
+  animation: slideIn 0.5s ease forwards;
+}
+@keyframes slideIn {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.post:hover {
+  transform: scale(1.01);
+}
+.post a {
+  color: var(--accent-color);
+  text-decoration: none;
+  font-weight: 600;
+}
+.tag {
+  font-size: 12px;
+  font-weight: bold;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-left: 8px;
+}
+.tag.paid {
+  background: var(--tag-paid);
+  color: #000;
+}
+.tag.free {
+  background: var(--tag-free);
+  color: #fff;
+}
+@media (max-width: 500px) {
+  body {
+    padding: 10px;
+  }
+  .post {
+    padding: 10px;
+  }
+}
